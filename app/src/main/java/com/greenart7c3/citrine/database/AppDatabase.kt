@@ -16,14 +16,16 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 
 @Database(
-    entities = [EventEntity::class, TagEntity::class, EventFTS::class, GroupEntity::class, GroupMemberEntity::class, GroupInviteEntity::class],
-    version = 13,
+    entities = [EventEntity::class, TagEntity::class, EventFTS::class, GroupEntity::class, GroupMemberEntity::class, GroupInviteEntity::class, WebIndexEntity::class],
+    version = 14,
 )
 @TypeConverters(Converters::class)
 abstract class AppDatabase : RoomDatabase() {
     abstract fun eventDao(): EventDao
 
     abstract fun groupDao(): GroupDao
+
+    abstract fun webIndexDao(): WebIndexDao
 
     companion object {
         @Volatile
@@ -32,7 +34,7 @@ abstract class AppDatabase : RoomDatabase() {
         private val _isDatabaseUpgrading = MutableStateFlow(false)
         val isDatabaseUpgrading: StateFlow<Boolean> = _isDatabaseUpgrading
 
-        private const val TARGET_VERSION = 13
+        private const val TARGET_VERSION = 14
 
         private fun checkNeedsMigration(context: Context): Boolean {
             val dbFile = context.getDatabasePath("citrine_database")
@@ -78,6 +80,7 @@ abstract class AppDatabase : RoomDatabase() {
                 .addMigrations(MIGRATION_10_11)
                 .addMigrations(MIGRATION_11_12)
                 .addMigrations(MIGRATION_12_13)
+                .addMigrations(MIGRATION_13_14)
                 .addCallback(object : Callback() {
                     override fun onOpen(db: SupportSQLiteDatabase) {
                         super.onOpen(db)
@@ -97,7 +100,7 @@ abstract class AppDatabase : RoomDatabase() {
 
 @Database(
     entities = [EventEntity::class, TagEntity::class],
-    version = 13,
+    version = 14,
 )
 @TypeConverters(Converters::class)
 abstract class HistoryDatabase : RoomDatabase() {
@@ -127,6 +130,7 @@ abstract class HistoryDatabase : RoomDatabase() {
                 .addMigrations(MIGRATION_10_11)
                 .addMigrations(MIGRATION_11_12)
                 .addMigrations(MIGRATION_12_13)
+                .addMigrations(MIGRATION_13_14)
                 .addCallback(object : Callback() {
                     override fun onOpen(db: SupportSQLiteDatabase) {
                         super.onOpen(db)
@@ -241,6 +245,33 @@ val MIGRATION_12_13 = object : Migration(12, 13) {
                 "`code` TEXT NOT NULL, `groupId` TEXT NOT NULL, `createdAt` INTEGER NOT NULL, " +
                 "PRIMARY KEY(`code`))",
         )
+    }
+}
+
+// SIP-01 (kind 39697 web index observations): the structured index table the
+// NIP-50 web-search operators query against. Created in the history database
+// too (the migrations are shared), where it simply stays empty. Rows cascade
+// away with their event, so no delete path needs to know about this table.
+val MIGRATION_13_14 = object : Migration(13, 14) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL(
+            "CREATE TABLE IF NOT EXISTS `WebIndexEntity` (" +
+                "`id` TEXT NOT NULL, `dTag` TEXT NOT NULL, `url` TEXT NOT NULL, " +
+                "`host` TEXT NOT NULL, `fileExt` TEXT, `title` TEXT NOT NULL, " +
+                "`description` TEXT, `language` TEXT, `contentHash` TEXT, " +
+                "`publishedAt` INTEGER, `observedAt` INTEGER NOT NULL, " +
+                "`firstSeenAt` INTEGER NOT NULL, `source` TEXT, `docType` TEXT, " +
+                "`platform` TEXT, `category` TEXT, `network` TEXT, `country` TEXT, " +
+                "`mime` TEXT, PRIMARY KEY(`id`), " +
+                "FOREIGN KEY(`id`) REFERENCES `EventEntity`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE)",
+        )
+        db.execSQL("CREATE INDEX IF NOT EXISTS `idx_web_index_d_tag` ON `WebIndexEntity` (`dTag`)")
+        db.execSQL("CREATE INDEX IF NOT EXISTS `idx_web_index_host` ON `WebIndexEntity` (`host`)")
+        db.execSQL("CREATE INDEX IF NOT EXISTS `idx_web_index_observed_at` ON `WebIndexEntity` (`observedAt`)")
+        db.execSQL("CREATE INDEX IF NOT EXISTS `idx_web_index_published_at` ON `WebIndexEntity` (`publishedAt`)")
+        db.execSQL("CREATE INDEX IF NOT EXISTS `idx_web_index_language` ON `WebIndexEntity` (`language`)")
+        db.execSQL("CREATE INDEX IF NOT EXISTS `idx_web_index_doc_type` ON `WebIndexEntity` (`docType`)")
+        db.execSQL("CREATE INDEX IF NOT EXISTS `idx_web_index_platform` ON `WebIndexEntity` (`platform`)")
     }
 }
 

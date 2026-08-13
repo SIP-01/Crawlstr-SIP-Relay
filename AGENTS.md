@@ -28,10 +28,18 @@ Compact guide for OpenCode sessions working in this repo. `CLAUDE.md` has fuller
 
 ## Database (corrects CLAUDE.md)
 
-- Room DB file `citrine_database`, **version 13**, **6 entities**: `EventEntity`, `TagEntity`, `EventFTS`, plus `GroupEntity`, `GroupMemberEntity`, `GroupInviteEntity` (added in migration 12→13). `EventEntity.expiresAt` added in 11→12.
+- Room DB file `citrine_database`, **version 14**, **7 entities**: `EventEntity`, `TagEntity`, `EventFTS`, plus `GroupEntity`, `GroupMemberEntity`, `GroupInviteEntity` (added in migration 12→13), and `WebIndexEntity` (SIP-01 structured index, added in migration 13→14; FK-cascades with its event). `EventEntity.expiresAt` added in 11→12.
 - Migrations are top-level `val MIGRATION_N_(N+1)` in `database/AppDatabase.kt`. When changing schema: add a `MIGRATION_N_(N+1)`, bump the `@Database(version = ...)` **and `TARGET_VERSION`** in **both** `AppDatabase` and `HistoryDatabase`, and `.addMigrations(...)` it on **both** builders.
 - There are **three** separate databases: `citrine_database` (`AppDatabase`), `citrine_history_database` (`HistoryDatabase`, only `EventEntity`+`TagEntity`, shares the same migrations), and `logs/LogDatabase`.
 - KSP exports Room schemas to `app/schemas/` (checked in) via `ksp { room.schemaLocation }`.
+
+## SIP-01 (Search Index Protocol)
+
+- This fork is a **mobile SIP-01 indexing relay**: it validates kind 39697 web index observations at ingestion (spec §12.4), indexes them into `WebIndexEntity` (relay profile §2), answers the NIP-50 web-search operators (§4) from `EventRepository.createQuery`, and advertises an `uncaged_index` block in the NIP-11 document (§5).
+- `server/sip01/WebDocument.kt` is the byte-compatibility-critical core (URL normalization §7, `d` tag §3, `x` content hash §8, validation §12.4). The spec §13 test vectors are in `app/src/test/.../WebDocumentTest.kt` — **keep them green**; drift breaks dedup against every other implementation.
+- `server/sip01/Sip01SearchParser.kt` parses `filter.search` into operators; `Sip01Search.matches()` is the live-fanout predicate, `EventRepository.appendSip01Clauses` the SQL translation. Keep the two semantically identical.
+- `service/Sip01IndexSync.kt` replicates kind 39697 from peer index relays (§6 federation) through the normal `innerProcessEvent` path (so sync'd events are validated + indexed too). Wired into `WebSocketServerService` next to `RelayAggregator`.
+- Settings live in `Settings` (`sip01*`) and persist via `LocalPreferences`; UI is `ui/settings/Sip01SettingsScreen.kt` (route `Settings/Sip01`).
 
 ## Server architecture (non-obvious wiring)
 

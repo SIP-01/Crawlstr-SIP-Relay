@@ -26,6 +26,7 @@ import androidx.compose.material.icons.filled.CloudSync
 import androidx.compose.material.icons.filled.RestartAlt
 import androidx.compose.material.icons.filled.Shield
 import androidx.compose.material.icons.filled.Storefront
+import androidx.compose.material.icons.filled.TravelExplore
 import androidx.compose.material.icons.filled.Web
 import androidx.compose.material.icons.filled.Wifi
 import androidx.compose.material3.AlertDialog
@@ -92,6 +93,12 @@ private val settingsCategories = listOf(
         titleRes = R.string.settings_category_aggregator,
         descriptionRes = R.string.settings_category_aggregator_description,
         icon = Icons.Filled.CloudSync,
+    ),
+    SettingsCategory(
+        route = Route.Sip01Settings.route,
+        titleRes = R.string.settings_category_sip01,
+        descriptionRes = R.string.settings_category_sip01_description,
+        icon = Icons.Filled.TravelExplore,
     ),
     SettingsCategory(
         route = Route.RetentionSettings.route,

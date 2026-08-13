@@ -61,6 +61,7 @@ import com.greenart7c3.citrine.ui.settings.Nip86SettingsScreen
 import com.greenart7c3.citrine.ui.settings.NsiteRelaysSettingsScreen
 import com.greenart7c3.citrine.ui.settings.RelayInfoSettingsScreen
 import com.greenart7c3.citrine.ui.settings.RetentionSettingsScreen
+import com.greenart7c3.citrine.ui.settings.Sip01SettingsScreen
 import com.greenart7c3.citrine.ui.settings.WebClientsSettingsScreen
 import com.greenart7c3.citrine.ui.settings.toShortenHex
 import kotlinx.coroutines.Dispatchers
@@ -325,6 +326,9 @@ fun CitrineScaffold(
             }
             composable(Route.AggregatorSettings.route) {
                 AggregatorSettingsScreen(modifier = subScreenModifier, onApplyChanges = restartRelay)
+            }
+            composable(Route.Sip01Settings.route) {
+                Sip01SettingsScreen(modifier = subScreenModifier, onApplyChanges = restartRelay)
             }
             composable(Route.RetentionSettings.route) {
                 RetentionSettingsScreen(modifier = subScreenModifier, onApplyChanges = restartRelay)

@@ -63,6 +63,19 @@ object PrefKeys {
     // Hex private key of the relay's generated fallback identity, used to sign NIP-29
     // group metadata when no owner is configured. Read/written only by RelayIdentity.
     const val RELAY_PRIVATE_KEY = "relay_private_key"
+
+    // SIP-01 (Search Index Protocol) mobile indexing relay settings.
+    const val SIP01_ENABLED = "sip01_enabled"
+    const val SIP01_VALIDATION_ENABLED = "sip01_validation_enabled"
+    const val SIP01_SYNC_ENABLED = "sip01_sync_enabled"
+    const val SIP01_INDEX_RELAYS = "sip01_index_relays"
+    const val SIP01_SYNC_WIFI_ONLY = "sip01_sync_wifi_only"
+    const val SIP01_SYNC_PAUSE_ON_LIMITED_NETWORK = "sip01_sync_pause_on_limited_network"
+    const val SIP01_SYNC_LAST_SYNC = "sip01_sync_last_sync"
+    const val SIP01_SCOPE = "sip01_scope"
+    const val SIP01_DOMAINS = "sip01_domains"
+    const val SIP01_LANGUAGES = "sip01_languages"
+    const val SIP01_DOC_TYPES = "sip01_doc_types"
 }
 
 object LocalPreferences {
@@ -156,6 +169,18 @@ object LocalPreferences {
                 putBoolean(PrefKeys.RELAY_AGGREGATOR_PAUSE_ON_LIMITED_NETWORK, settings.relayAggregatorPauseOnLimitedNetwork)
                 putString(PrefKeys.AGGREGATOR_SIGNER_PUBKEY, settings.aggregatorSignerPubkey)
                 putString(PrefKeys.AGGREGATOR_SIGNER_PACKAGE_NAME, settings.aggregatorSignerPackageName)
+
+                putBoolean(PrefKeys.SIP01_ENABLED, settings.sip01Enabled)
+                putBoolean(PrefKeys.SIP01_VALIDATION_ENABLED, settings.sip01ValidationEnabled)
+                putBoolean(PrefKeys.SIP01_SYNC_ENABLED, settings.sip01SyncEnabled)
+                putStringSet(PrefKeys.SIP01_INDEX_RELAYS, settings.sip01IndexRelays)
+                putBoolean(PrefKeys.SIP01_SYNC_WIFI_ONLY, settings.sip01SyncWifiOnly)
+                putBoolean(PrefKeys.SIP01_SYNC_PAUSE_ON_LIMITED_NETWORK, settings.sip01SyncPauseOnLimitedNetwork)
+                putLong(PrefKeys.SIP01_SYNC_LAST_SYNC, settings.sip01SyncLastSync)
+                putString(PrefKeys.SIP01_SCOPE, settings.sip01Scope)
+                putStringSet(PrefKeys.SIP01_DOMAINS, settings.sip01Domains)
+                putStringSet(PrefKeys.SIP01_LANGUAGES, settings.sip01Languages)
+                putStringSet(PrefKeys.SIP01_DOC_TYPES, settings.sip01DocTypes)
             }
         }
     }
@@ -236,5 +261,18 @@ object LocalPreferences {
         Settings.relayAggregatorPauseOnLimitedNetwork = prefs.getBoolean(PrefKeys.RELAY_AGGREGATOR_PAUSE_ON_LIMITED_NETWORK, true)
         Settings.aggregatorSignerPubkey = prefs.getString(PrefKeys.AGGREGATOR_SIGNER_PUBKEY, "") ?: ""
         Settings.aggregatorSignerPackageName = prefs.getString(PrefKeys.AGGREGATOR_SIGNER_PACKAGE_NAME, "") ?: ""
+
+        Settings.sip01Enabled = prefs.getBoolean(PrefKeys.SIP01_ENABLED, true)
+        Settings.sip01ValidationEnabled = prefs.getBoolean(PrefKeys.SIP01_VALIDATION_ENABLED, true)
+        Settings.sip01SyncEnabled = prefs.getBoolean(PrefKeys.SIP01_SYNC_ENABLED, false)
+        Settings.sip01IndexRelays = prefs.getStringSet(PrefKeys.SIP01_INDEX_RELAYS, null)
+            ?: Settings.DEFAULT_SIP01_INDEX_RELAYS
+        Settings.sip01SyncWifiOnly = prefs.getBoolean(PrefKeys.SIP01_SYNC_WIFI_ONLY, true)
+        Settings.sip01SyncPauseOnLimitedNetwork = prefs.getBoolean(PrefKeys.SIP01_SYNC_PAUSE_ON_LIMITED_NETWORK, true)
+        Settings.sip01SyncLastSync = prefs.getLong(PrefKeys.SIP01_SYNC_LAST_SYNC, 0L)
+        Settings.sip01Scope = prefs.getString(PrefKeys.SIP01_SCOPE, "global") ?: "global"
+        Settings.sip01Domains = prefs.getStringSet(PrefKeys.SIP01_DOMAINS, emptySet()) ?: emptySet()
+        Settings.sip01Languages = prefs.getStringSet(PrefKeys.SIP01_LANGUAGES, emptySet()) ?: emptySet()
+        Settings.sip01DocTypes = prefs.getStringSet(PrefKeys.SIP01_DOC_TYPES, emptySet()) ?: emptySet()
     }
 }

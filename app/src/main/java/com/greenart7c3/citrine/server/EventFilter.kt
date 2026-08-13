@@ -1,5 +1,6 @@
 package com.greenart7c3.citrine.server
 
+import com.greenart7c3.citrine.server.sip01.Sip01Search
 import com.vitorpamplona.quartz.nip01Core.core.Event
 import java.util.function.Predicate
 
@@ -13,7 +14,15 @@ data class EventFilter(
     val limit: Int? = null,
     val search: String? = null,
 ) : Predicate<Event> {
-    val searchKeywords: Set<String> = search?.let { tokenizeSearchString(it) } ?: emptySet()
+    /**
+     * The NIP-50 search string parsed once into SIP-01 web-search operators
+     * (`site:`, `domain:`, `url:`, `inurl:`, `title:`, `topic:`, …) and
+     * free-text terms. `textTerms`/`notTextTerms` replace [searchKeywords] so
+     * operator tokens never leak into the FTS query and `-term` negation works.
+     */
+    val sip01Search: Sip01Search = Sip01Search.parse(search)
+
+    val searchKeywords: Set<String> = sip01Search.textTerms.toSet()
 
     override fun test(event: Event): Boolean {
         // Cheapest checks first: this runs against every active subscription
@@ -43,7 +52,7 @@ data class EventFilter(
             return false
         }
 
-        if (searchKeywords.isNotEmpty() && !testSearch(event)) {
+        if ((searchKeywords.isNotEmpty() || sip01Search.hasSearchClauses) && !sip01Search.matches(event)) {
             return false
         }
 
@@ -51,22 +60,6 @@ data class EventFilter(
     }
 
     private fun testTag(tag: Map.Entry<String, Set<String>>, event: Event): Boolean = event.tags.any { it.size > 1 && it[0] == tag.key && it[1] in tag.value }
-
-    private fun testSearch(event: Event): Boolean {
-        val eventTokens = tokenizeString(event.content)
-        return searchKeywords.all { it in eventTokens }
-    }
-
-    private fun tokenizeSearchString(string: String): Set<String> = string.split(Regex("\\s+"))
-        .filter { it.isNotEmpty() && !it.contains(":") }
-        .map { it.lowercase().replace(TOKENIZE_REGEX, "") }
-        .filter { it.isNotEmpty() }
-        .toSet()
-
-    private fun tokenizeString(string: String): Set<String> = string.split(TOKENIZE_REGEX)
-        .filter { it.isNotEmpty() }
-        .map { it.lowercase() }
-        .toSet()
 
     companion object {
         val TOKENIZE_REGEX = "[^a-zA-Z0-9]".toRegex()

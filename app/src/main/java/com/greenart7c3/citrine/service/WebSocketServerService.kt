@@ -259,6 +259,10 @@ class WebSocketServerService : Service() {
             RelayAggregator.start(database)
         }
 
+        if (Settings.sip01Enabled && Settings.sip01SyncEnabled) {
+            Sip01IndexSync.start(database)
+        }
+
         var error = true
         var attempts = 0
         while (error && attempts < 5) {
@@ -315,6 +319,7 @@ class WebSocketServerService : Service() {
                     timer?.cancel()
                     timer = null
                     RelayAggregator.stop()
+                    Sip01IndexSync.stop()
                     EventSubscription.closeAll()
                     CustomWebSocketService.server?.stop()
                     CustomWebSocketService.server = null

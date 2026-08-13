@@ -8,6 +8,7 @@ import com.greenart7c3.citrine.database.EventWithTags
 import com.greenart7c3.citrine.database.IdAndCreatedAt
 import com.greenart7c3.citrine.logs.Log
 import com.greenart7c3.citrine.server.nip29.GroupManager
+import com.greenart7c3.citrine.server.sip01.Sip01Search
 import com.vitorpamplona.quartz.nip01Core.core.Event
 import com.vitorpamplona.quartz.nip01Core.jackson.JacksonMapper
 import com.vitorpamplona.quartz.utils.TimeUtils
@@ -71,9 +72,19 @@ object EventRepository {
 
         if (filter.searchKeywords.isNotEmpty()) {
             joinClause.append(" INNER JOIN event_fts ON event_fts.rowid = EventEntity.rowid")
-            val searchParam = filter.searchKeywords.joinToString(" ") { "\"$it\"" }
+            val searchParam = StringBuilder(filter.searchKeywords.joinToString(" ") { "\"$it\"" })
+            filter.sip01Search.notTextTerms.forEach { searchParam.append(" NOT \"$it\"") }
             appendWhere("event_fts MATCH ?")
-            params.add(searchParam)
+            params.add(searchParam.toString())
+        }
+
+        // SIP-01 web-search operators (relay profile §4) map onto the structured
+        // WebIndexEntity fields extracted at ingest time. Events without an index
+        // row — all non-39697 events — never match, so these operators are safe in
+        // mixed-kind filters. Negated `-op:` forms emit NOT (...) predicates.
+        val sip = filter.sip01Search
+        if (sip.requiresWebIndexJoin) {
+            appendSip01Clauses(sip, joinClause, { pred -> appendWhere(pred) }, params)
         }
 
         if (filter.kinds.isNotEmpty()) {
@@ -119,8 +130,19 @@ object EventRepository {
             "EventEntity.createdAt DESC, EventEntity.id ASC"
         }
 
-        // The FTS join is 1:1 (rowid = rowid) and the tag filters use EXISTS, so no row
-        // in the result is ever duplicated and no DISTINCT is needed in any mode.
+        // `distinct:domain` / `distinct:author` collapse each host/pubkey down to
+        // its newest event via SQLite's bare-column-with-MAX() rule. Filters
+        // restricted to classic replaceable kinds are exempt — those already hold
+        // at most one current event per author (matches the reference relay).
+        val distinctColumn = when {
+            filter.kinds.isNotEmpty() && filter.kinds.all { it == 0 || it == 3 || it in 10000 until 20000 } -> null
+            sip.distinctDomain -> "WebIndexEntity.host"
+            sip.distinctAuthor -> "EventEntity.pubkey"
+            else -> null
+        }
+
+        // The FTS and WebIndexEntity joins are 1:1 (rowid = rowid, id = id) and the tag
+        // filters use EXISTS, so no row in the result is ever duplicated.
         val query = StringBuilder()
         when (mode) {
             SelectMode.COUNT -> {
@@ -129,15 +151,28 @@ object EventRepository {
                 query.append(whereClause)
             }
             SelectMode.FULL_EVENTS -> {
-                query.append("SELECT EventEntity.* FROM EventEntity EventEntity")
+                if (distinctColumn != null) {
+                    // MAX() + bare columns: SQLite guarantees the bare columns come
+                    // from the row holding the maximum — i.e. the newest event per
+                    // group. No DISTINCT: it would forbid the FTS rowid ORDER BY.
+                    query.append("SELECT EventEntity.*, MAX(EventEntity.createdAt) FROM EventEntity EventEntity")
+                } else {
+                    query.append("SELECT EventEntity.* FROM EventEntity EventEntity")
+                }
                 query.append(joinClause)
                 query.append(whereClause)
+                if (distinctColumn != null) {
+                    query.append(" GROUP BY ").append(distinctColumn)
+                }
                 query.append(" ORDER BY ").append(orderBy)
             }
             SelectMode.IDS_AND_CREATED_AT -> {
                 query.append("SELECT EventEntity.id AS id, EventEntity.createdAt AS createdAt FROM EventEntity EventEntity")
                 query.append(joinClause)
                 query.append(whereClause)
+                if (distinctColumn != null) {
+                    query.append(" GROUP BY ").append(distinctColumn)
+                }
                 query.append(" ORDER BY ").append(orderBy)
             }
         }
@@ -147,6 +182,129 @@ object EventRepository {
             params.add(it)
         }
         return Pair(query.toString(), params)
+    }
+
+    /** Escape the LIKE wildcards in a user-supplied substring match value. */
+    private fun escapeLike(value: String): String = value
+        .replace("\\", "\\\\")
+        .replace("%", "\\%")
+        .replace("_", "\\_")
+
+    /**
+     * Append the SIP-01 web-search operator clauses (relay profile §4) to the
+     * query under construction. Joins WebIndexEntity and emits one predicate per
+     * operator occurrence; repeated keyword operators OR together, `inurl:` and
+     * `title:` tokens AND together, and every `-op:` form negates.
+     */
+    private fun appendSip01Clauses(
+        sip: Sip01Search,
+        joinClause: StringBuilder,
+        appendWhere: (CharSequence) -> Unit,
+        params: MutableList<Any>,
+    ) {
+        joinClause.append(" INNER JOIN WebIndexEntity ON WebIndexEntity.id = EventEntity.id")
+
+        // site:<host> — the document's host IS <host> or a subdomain of it
+        // (Google-style site: semantics). Multiple site: tokens OR together.
+        fun hostOrSubdomainClause(hosts: List<String>, negate: Boolean) {
+            if (hosts.isEmpty()) return
+            val clause = hosts.joinToString(" OR ") { "(WebIndexEntity.host = ? OR WebIndexEntity.host LIKE '%.' || ? ESCAPE '\\')" }
+            hosts.forEach {
+                params.add(it)
+                params.add(it)
+            }
+            appendWhere(if (negate) "NOT ($clause)" else "($clause)")
+        }
+        hostOrSubdomainClause(sip.site, negate = false)
+        hostOrSubdomainClause(sip.notSite, negate = true)
+
+        // domain:<host> — exact host match (no subdomains).
+        fun exactHostClause(hosts: List<String>, negate: Boolean) {
+            if (hosts.isEmpty()) return
+            val placeholders = hosts.joinToString(",") { "?" }
+            params.addAll(hosts)
+            appendWhere(if (negate) "WebIndexEntity.host NOT IN ($placeholders)" else "WebIndexEntity.host IN ($placeholders)")
+        }
+        exactHostClause(sip.domain, negate = false)
+        exactHostClause(sip.notDomain, negate = true)
+
+        // url:<url> — exact normalized-URL match (value already normalized by the parser).
+        sip.url?.let {
+            appendWhere("WebIndexEntity.url = ?")
+            params.add(it)
+        }
+        sip.notUrl?.let {
+            appendWhere("WebIndexEntity.url != ?")
+            params.add(it)
+        }
+
+        // inurl:<text> / title:<text> — case-insensitive substring match; multiple
+        // tokens AND (one predicate each).
+        fun substringClause(column: String, values: List<String>, negate: Boolean) {
+            values.forEach {
+                appendWhere(if (negate) "$column NOT LIKE '%' || ? || '%' ESCAPE '\\'" else "$column LIKE '%' || ? || '%' ESCAPE '\\'")
+                params.add(escapeLike(it))
+            }
+        }
+        substringClause("WebIndexEntity.url", sip.inUrl, negate = false)
+        substringClause("WebIndexEntity.url", sip.notInUrl, negate = true)
+        substringClause("WebIndexEntity.title", sip.title, negate = false)
+        substringClause("WebIndexEntity.title", sip.notTitle, negate = true)
+
+        // topic:<t> — SIP-01 topic tags, the topical-engine slice. Evaluated
+        // against the generic tag store so unvalidated (but stored) events
+        // still answer topic queries.
+        fun topicClause(topics: List<String>, negate: Boolean) {
+            if (topics.isEmpty()) return
+            val placeholders = topics.joinToString(",") { "?" }
+            params.addAll(topics)
+            val exists = "EXISTS (SELECT 1 FROM TagEntity WHERE pkEvent = EventEntity.id AND col0Name = 't' AND col1Value IN ($placeholders))"
+            appendWhere(if (negate) "NOT $exists" else exists)
+        }
+        topicClause(sip.topic, negate = false)
+        topicClause(sip.notTopic, negate = true)
+
+        // Keyword column operators: type:, platform:, category:, network:,
+        // country:, mime:, source:, filetype:, lang: (each OR across repeated
+        // tokens, with a negated `-key:` form). Values are already normalized
+        // (case) by the parser.
+        fun keywordClause(column: String, values: List<String>, negate: Boolean) {
+            if (values.isEmpty()) return
+            val placeholders = values.joinToString(",") { "?" }
+            params.addAll(values)
+            appendWhere(if (negate) "$column NOT IN ($placeholders)" else "$column IN ($placeholders)")
+        }
+        keywordClause("WebIndexEntity.docType", sip.type, negate = false)
+        keywordClause("WebIndexEntity.docType", sip.notType, negate = true)
+        keywordClause("WebIndexEntity.platform", sip.platform, negate = false)
+        keywordClause("WebIndexEntity.platform", sip.notPlatform, negate = true)
+        keywordClause("WebIndexEntity.category", sip.category, negate = false)
+        keywordClause("WebIndexEntity.category", sip.notCategory, negate = true)
+        keywordClause("WebIndexEntity.network", sip.network, negate = false)
+        keywordClause("WebIndexEntity.network", sip.notNetwork, negate = true)
+        keywordClause("WebIndexEntity.country", sip.country, negate = false)
+        keywordClause("WebIndexEntity.country", sip.notCountry, negate = true)
+        keywordClause("WebIndexEntity.mime", sip.mime, negate = false)
+        keywordClause("WebIndexEntity.mime", sip.notMime, negate = true)
+        keywordClause("WebIndexEntity.source", sip.source, negate = false)
+        keywordClause("WebIndexEntity.source", sip.notSource, negate = true)
+        keywordClause("WebIndexEntity.fileExt", sip.filetype, negate = false)
+        keywordClause("WebIndexEntity.fileExt", sip.notFiletype, negate = true)
+        keywordClause("WebIndexEntity.language", sip.lang, negate = false)
+        keywordClause("WebIndexEntity.language", sip.notLang, negate = true)
+
+        // before:<date> / after:<date> — content-freshness range on the page's
+        // claimed publication time (the SIP-01 `published` tag). Documents
+        // without a declared publication date don't match. Observation time
+        // remains available through the native since/until filter fields.
+        sip.before?.let {
+            appendWhere("WebIndexEntity.publishedAt < ?")
+            params.add(it)
+        }
+        sip.after?.let {
+            appendWhere("WebIndexEntity.publishedAt >= ?")
+            params.add(it)
+        }
     }
 
     fun query(

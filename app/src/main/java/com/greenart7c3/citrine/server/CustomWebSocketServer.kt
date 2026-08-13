@@ -22,12 +22,15 @@ import com.greenart7c3.citrine.Citrine
 import com.greenart7c3.citrine.database.AppDatabase
 import com.greenart7c3.citrine.database.EventWithTags
 import com.greenart7c3.citrine.database.HistoryDatabase
+import com.greenart7c3.citrine.database.toEvent
 import com.greenart7c3.citrine.database.toEventWithTags
+import com.greenart7c3.citrine.database.toWebIndexEntity
 import com.greenart7c3.citrine.logs.Log
 import com.greenart7c3.citrine.provider.CitrineContract
 import com.greenart7c3.citrine.server.nip29.GroupManager
 import com.greenart7c3.citrine.server.nip29.Nip29Handler
 import com.greenart7c3.citrine.server.nip29.Nip29Result
+import com.greenart7c3.citrine.server.sip01.WebDocument
 import com.greenart7c3.citrine.service.CustomWebSocketService
 import com.greenart7c3.citrine.service.EventBroadcastWorker
 import com.greenart7c3.citrine.service.LocalPreferences
@@ -137,6 +140,31 @@ class CustomWebSocketServer(
             } catch (e: Exception) {
                 if (e is CancellationException) throw e
                 Log.e(Citrine.TAG, "Failed to load NIP-29 groups", e)
+            }
+        }
+
+        // SIP-01: backfill the structured web index for kind 39697 events stored
+        // before the index existed (upgrade path). Batched so a large archive
+        // doesn't block startup; live ingest indexes new events as they arrive.
+        if (Settings.sip01Enabled) {
+            Citrine.instance.applicationScope.launch(Dispatchers.IO) {
+                try {
+                    val now = System.currentTimeMillis() / 1000
+                    var afterId = ""
+                    while (true) {
+                        val batch = appDatabase.webIndexDao().getUnindexedWebDocuments(afterId)
+                        if (batch.isEmpty()) break
+                        val rows = batch.mapNotNull { it.toEvent().toWebIndexEntity(now) }
+                        if (rows.isNotEmpty()) appDatabase.webIndexDao().upsertAll(rows)
+                        if (rows.size < batch.size) {
+                            Log.w(Citrine.TAG, "SIP-01 backfill: ${batch.size - rows.size} unindexable kind 39697 events skipped")
+                        }
+                        afterId = batch.maxOf { it.event.id }
+                    }
+                } catch (e: Exception) {
+                    if (e is CancellationException) throw e
+                    Log.e(Citrine.TAG, "SIP-01 web index backfill failed", e)
+                }
             }
         }
 
@@ -389,6 +417,7 @@ class CustomWebSocketServer(
         RejectedByNip29,
         BannedPubkey,
         BannedEvent,
+        InvalidWebDocument,
     }
 
     suspend fun verifyEvent(event: Event, connection: Connection?, shouldVerify: Boolean, fromAggregator: Boolean = false): VerificationResult {
@@ -470,6 +499,18 @@ class CustomWebSocketServer(
         if (!event.verify()) {
             Log.d(Citrine.TAG, "event ${event.id} does not have a valid id or signature")
             return VerificationResult.InvalidId
+        }
+
+        // SIP-01 §12.4: kind 39697 web index observations are strictly validated
+        // at the door — malformed observations (bad d/u/x consistency, unknown
+        // schema version, overlong fields, …) never reach the index. The reason
+        // string is recomputed in the OK response (validation is deterministic).
+        if (event.kind == WebDocument.WEB_DOCUMENT_KIND && Settings.sip01Enabled && Settings.sip01ValidationEnabled) {
+            val reason = WebDocument.validateWebDocument(event)
+            if (reason != null) {
+                Log.d(Citrine.TAG, "web document rejected ${event.id}: $reason")
+                return VerificationResult.InvalidWebDocument
+            }
         }
 
         val deletedEvents = appDatabase.eventDao().getDeletedEvents(event.id)
@@ -602,6 +643,12 @@ class CustomWebSocketServer(
             }
             VerificationResult.BannedEvent -> {
                 connection?.send(CommandResult.invalid(event, "blocked: event is banned").toJson())
+            }
+            VerificationResult.InvalidWebDocument -> {
+                // Re-run validation to recover the reason string (SIP-01 §12.4);
+                // only happens for rejected events, so the double pass is cheap.
+                val reason = WebDocument.validateWebDocument(event) ?: "malformed web document"
+                connection?.send(CommandResult.invalid(event, reason).toJson())
             }
             VerificationResult.Deleted -> {
                 connection?.send(CommandResult.invalid(event, "Event deleted").toJson())
@@ -784,6 +831,21 @@ class CustomWebSocketServer(
             if (toStore.isNotEmpty()) {
                 appDatabase.eventDao()
                     .insertEventsWithTagsBatch(toStore.map { it.toEventWithTags() })
+
+                // SIP-01 structured indexing for the batch path (see indexWebDocument).
+                if (Settings.sip01Enabled) {
+                    val now = System.currentTimeMillis() / 1000
+                    val rows = toStore.mapNotNull { e ->
+                        if (e.kind == WebDocument.WEB_DOCUMENT_KIND) {
+                            runCatching { e.toWebIndexEntity(now) }.getOrNull()
+                        } else {
+                            null
+                        }
+                    }
+                    if (rows.isNotEmpty()) {
+                        appDatabase.webIndexDao().upsertAll(rows)
+                    }
+                }
             }
 
             finalReplaceables.forEach { e ->
@@ -858,8 +920,29 @@ class CustomWebSocketServer(
         }
     }
 
+    /**
+     * SIP-01 structured indexing (relay profile §2): kind 39697 observations are
+     * extracted into WebIndexEntity rows so the NIP-50 web-search operators have
+     * dedicated fields to query. REPLACE-keyed on the event id; the FK cascade
+     * removes the row if the event is later deleted or superseded. Index rows are
+     * relay-internal and never published back to Nostr.
+     */
+    private suspend fun indexWebDocument(event: Event) {
+        if (!Settings.sip01Enabled) return
+        if (event.kind != WebDocument.WEB_DOCUMENT_KIND) return
+        try {
+            event.toWebIndexEntity(System.currentTimeMillis() / 1000)?.let {
+                appDatabase.webIndexDao().upsert(it)
+            }
+        } catch (e: Exception) {
+            if (e is CancellationException) throw e
+            Log.e(Citrine.TAG, "Failed to index web document ${event.id}", e)
+        }
+    }
+
     private suspend fun save(event: Event, connection: Connection?) {
         appDatabase.eventDao().insertEventWithTags(event.toEventWithTags(), connection = connection)
+        indexWebDocument(event)
 
         // Check if offline and broadcast with WorkManager
         if (isOffline()) {
@@ -1260,6 +1343,37 @@ class CustomWebSocketServer(
                         // relay's generated identity.
                         val relayPubkey = RelayIdentity.pubKeyHex()
 
+                        // SIP-01 §15 capability advertisement: search engines discover
+                        // from this block what the relay indexes (kind 39697 web index
+                        // observations), which NIP-50 web-search operators it answers,
+                        // and the operator-declared scope. Omitted entirely when the
+                        // SIP-01 index is disabled so engines don't route queries here.
+                        fun jsonEscape(s: String) = s.replace("\\", "\\\\").replace("\"", "\\\"")
+                        fun jsonArray(values: Set<String>) = values.joinToString(",", "[", "]") { "\"${jsonEscape(it)}\"" }
+                        val uncagedIndex = if (Settings.sip01Enabled) {
+                            buildString {
+                                append(",\"uncaged_index\": {")
+                                append("\"sip01\": true,")
+                                append("\"nip50\": true,")
+                                append("\"nip77\": true,")
+                                append("\"document_kinds\": [${WebDocument.WEB_DOCUMENT_KIND}],")
+                                append("\"scope\": \"${jsonEscape(Settings.sip01Scope)}\",")
+                                append("\"domains\": ${jsonArray(Settings.sip01Domains.ifEmpty { setOf("*") })}")
+                                if (Settings.sip01Languages.isNotEmpty()) {
+                                    append(",\"languages\": ${jsonArray(Settings.sip01Languages)}")
+                                }
+                                if (Settings.sip01DocTypes.isNotEmpty()) {
+                                    append(",\"document_types\": ${jsonArray(Settings.sip01DocTypes)}")
+                                }
+                                append(
+                                    ",\"filters\": [\"site\", \"domain\", \"url\", \"inurl\", \"title\", \"topic\", \"type\", \"platform\", \"category\", \"network\", \"country\", \"mime\", \"filetype\", \"source\", \"lang\", \"before\", \"after\", \"distinct:domain\"]",
+                                )
+                                append("}")
+                            }
+                        } else {
+                            ""
+                        }
+
                         call.respondText(
                             """
                             {
@@ -1269,9 +1383,9 @@ class CustomWebSocketServer(
                               "contact": "${Settings.contact}",
                               "self": "$relayPubkey",
                               "supported_nips": $supportedNips,
-                              "software": "https://github.com/greenart7c3/Citrine",
+                              "software": "https://github.com/NostrDanish/Crawlstr-SIP-Relay",
                               "version": "${BuildConfig.VERSION_NAME}",
-                              "icon": "${Settings.relayIcon}"
+                              "icon": "${Settings.relayIcon}"$uncagedIndex
                             }
                             """.trimIndent(),
                             ContentType.Application.Json,

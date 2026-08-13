@@ -255,4 +255,27 @@
     <string name="logout">Logout</string>
     <string name="relay_owner_not_configured">No relay owner configured</string>
     <string name="relay_owner_login_description">Login with an external signer to set the relay owner. The owner\'s key becomes the relay identity that signs NIP-29 group metadata; without an owner, the relay signs with its own generated key.</string>
+    <string name="settings_category_sip01">Search Index (SIP-01)</string>
+    <string name="settings_category_sip01_description">Validate, index, sync, and serve SIP-01 web index observations</string>
+    <string name="sip01_intro">SIP-01 is the decentralized search index protocol on Nostr. This relay can validate, index, and serve web index observations, and replicate the shared index from peer index relays.</string>
+    <string name="sip01_enabled">SIP-01 indexing relay</string>
+    <string name="sip01_enabled_description">Accept kind %1$d web index observations, index them into searchable fields, answer the NIP-50 web-search operators, and advertise SIP-01 support in the relay information document.</string>
+    <string name="sip01_validation">Strict validation</string>
+    <string name="sip01_validation_description">Reject malformed observations at ingestion (invalid URL, d/x hash mismatch, unknown schema version). Garbage in = garbage index.</string>
+    <string name="sip01_sync">Replicate the index</string>
+    <string name="sip01_sync_description">Subscribe to kind 39697 on the peer index relays below so this phone keeps a live copy of the shared index, even offline.</string>
+    <string name="sip01_sync_status">Status: %1$s — %2$d/%3$d relays connected, %4$d observations received</string>
+    <string name="sip01_sync_phase_idle">idle</string>
+    <string name="sip01_sync_phase_syncing">syncing</string>
+    <string name="sip01_sync_phase_listening">listening</string>
+    <string name="sip01_sync_phase_paused">paused</string>
+    <string name="sip01_index_relays">Index relays</string>
+    <string name="sip01_index_relays_description">Peer relays to replicate web index observations from. These are the relays the ecosystem crawlers publish to.</string>
+    <string name="sip01_index_relays_hint">No index relays configured — sync will not start</string>
+    <string name="sip01_scope_header">Index scope (NIP-11)</string>
+    <string name="sip01_scope_description">Advertised in the relay information document so search engines know what this relay indexes. Leave domains empty for a global index.</string>
+    <string name="sip01_scope">Scope (e.g. global)</string>
+    <string name="sip01_domains">Domains (comma separated, empty = all)</string>
+    <string name="sip01_languages">Languages (comma separated ISO codes, empty = all)</string>
+    <string name="sip01_doc_types">Document types (comma separated, empty = all)</string>
 </resources>

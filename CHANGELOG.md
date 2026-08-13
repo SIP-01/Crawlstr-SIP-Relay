@@ -1,3 +1,15 @@
+## Unreleased — Crawlstr SIP Relay (SIP-01)
+
+- SIP-01 (Search Index Protocol) support: this relay is now a mobile indexing relay for the decentralized search index
+  - Strict ingestion validation of kind 39697 web index observations (spec §12.4) with `invalid:` OK rejections
+  - Byte-compatible URL normalization, `d`-tag and `x` content hashing (spec §7/§3/§8, §13 test vectors in `WebDocumentTest`)
+  - Structured indexing into a new `WebIndexEntity` table (database version 14, relay profile §2)
+  - NIP-50 web-search operators: `site:`, `domain:`, `url:`, `inurl:`, `title:`, `topic:`, `type:`, `platform:`, `category:`, `network:`, `country:`, `mime:`, `filetype:`, `source:`, `lang:`, `before:`, `after:`, `distinct:domain`/`distinct:author` (plus `-op:` negations)
+  - NIP-11 `uncaged_index` capability block (spec §15)
+  - Optional index replication from peer index relays (federation, §6) with WiFi-only / limited-network pausing
+  - New settings screen: Settings → Search Index (SIP-01)
+- NIP-50 free text now supports `-term` negation
+
 ## Citrine 3.0.1
 
 - Fixed a crash when unregistering an unregistered Pokey receiver

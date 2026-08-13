@@ -86,6 +86,12 @@ sealed class Route(
         selectedIcon = Icons.Default.Settings,
     )
 
+    data object Sip01Settings : Route(
+        route = "Settings/Sip01",
+        icon = Icons.Outlined.Settings,
+        selectedIcon = Icons.Default.Settings,
+    )
+
     data object RetentionSettings : Route(
         route = "Settings/Retention",
         icon = Icons.Outlined.Settings,
@@ -130,6 +136,7 @@ val settingsSubRoutes = setOf(
     Route.AccessControlSettings.route,
     Route.NetworkSettings.route,
     Route.AggregatorSettings.route,
+    Route.Sip01Settings.route,
     Route.RetentionSettings.route,
     Route.BackupSettings.route,
     Route.WebClientsSettings.route,

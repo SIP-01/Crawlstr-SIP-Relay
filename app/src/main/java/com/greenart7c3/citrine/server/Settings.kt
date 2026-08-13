@@ -36,6 +36,15 @@ object Settings {
         "wss://nostr.land/",
     )
 
+    // Peer relays the SIP-01 index sync subscribes to for kind 39697 — the
+    // publishing pool used by the ecosystem's crawlers (Crawlstr, indexstr).
+    val DEFAULT_SIP01_INDEX_RELAYS = setOf(
+        "wss://relay.nostr.band/",
+        "wss://relay.ditto.pub/",
+        "wss://relay.noswhere.com/",
+        "wss://relay.primal.net/",
+    )
+
     var allowedKinds: Set<Int> = emptySet()
 
     // Signed artifacts that must never be stored as standalone events (see DEFAULT_REJECTED_KINDS).
@@ -138,6 +147,48 @@ object Settings {
     var aggregatorSignerPubkey: String = ""
     var aggregatorSignerPackageName: String = ""
 
+    // ------------------------------------------------------------------------
+    // SIP-01 (Search Index Protocol) — https://github.com/NostrDanish/SIP-01
+    // This relay doubles as a mobile indexing relay for the decentralized
+    // search index: it validates kind 39697 web index observations at
+    // ingestion (§12.4), indexes them into dedicated queryable fields (relay
+    // profile §2), answers the NIP-50 web-search operators (§4), advertises
+    // its scope via NIP-11 (§5), and optionally replicates the index from
+    // peer index relays (§6 federation).
+    // ------------------------------------------------------------------------
+
+    // Master switch: validate + index + advertise SIP-01 support.
+    var sip01Enabled: Boolean = true
+
+    // When true, malformed kind 39697 observations are rejected at ingestion with
+    // an OK false invalid: message (SIP-01 §12.4). When false they are stored as
+    // plain events (and still indexed best-effort when extractable).
+    var sip01ValidationEnabled: Boolean = true
+
+    // Replicate kind 39697 from the relays in [sip01IndexRelays]: the phone
+    // becomes a full node of the shared index, not just a publishing target.
+    var sip01SyncEnabled: Boolean = false
+
+    // Peer index relays to replicate kind 39697 from.
+    var sip01IndexRelays: Set<String> = DEFAULT_SIP01_INDEX_RELAYS
+
+    // Suspend index sync on metered networks (mirrors the aggregator default-on).
+    var sip01SyncWifiOnly: Boolean = true
+
+    // Suspend index sync on limited/restricted networks (captive portals etc).
+    var sip01SyncPauseOnLimitedNetwork: Boolean = true
+
+    // Epoch seconds watermark of the last successful index sync catch-up.
+    var sip01SyncLastSync: Long = 0L
+
+    // NIP-11 uncaged_index capability block: operator-declared scope. "global"
+    // with domains ["*"] means unrestricted; specialized relays declare their
+    // slice (e.g. domains ["github.com"], languages ["en"], docTypes ["repository"]).
+    var sip01Scope: String = "global"
+    var sip01Domains: Set<String> = emptySet()
+    var sip01Languages: Set<String> = emptySet()
+    var sip01DocTypes: Set<String> = emptySet()
+
     fun defaultValues() {
         allowedKinds = emptySet()
         rejectedKinds = DEFAULT_REJECTED_KINDS
@@ -185,6 +236,17 @@ object Settings {
         relayAggregatorPauseOnLimitedNetwork = true
         aggregatorSignerPubkey = ""
         aggregatorSignerPackageName = ""
+        sip01Enabled = true
+        sip01ValidationEnabled = true
+        sip01SyncEnabled = false
+        sip01IndexRelays = DEFAULT_SIP01_INDEX_RELAYS
+        sip01SyncWifiOnly = true
+        sip01SyncPauseOnLimitedNetwork = true
+        sip01SyncLastSync = 0L
+        sip01Scope = "global"
+        sip01Domains = emptySet()
+        sip01Languages = emptySet()
+        sip01DocTypes = emptySet()
     }
 
     fun webClientFromJson(json: String): MutableMap<String, String> = JacksonMapper.mapper.readValue<MutableMap<String, String>>(json)
