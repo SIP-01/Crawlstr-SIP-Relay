@@ -1060,7 +1060,7 @@ class CustomWebSocketServer(
             }
         } ?: run {
             Log.d(Citrine.TAG, "${targetFile.name} not sent")
-            return call.respond(HttpStatusCode.InternalServerError, null)
+            call.respond(HttpStatusCode.InternalServerError, null)
         }
     }
 
@@ -1500,9 +1500,10 @@ class CustomWebSocketServer(
                         val uriBuilder = "content://com.greenart7c3.citrine.provider/events/by_kind".toUri()
                             .buildUpon()
                             .appendQueryParameter("kind", kind.toString())
+                            .appendQueryParameter("limit", limit.toString())
                             .appendQueryParameter("offset", offset.toString())
 
-                        pubkey?.let { uriBuilder.appendQueryParameter("pubkey", it.toString()) }
+                        pubkey?.let { uriBuilder.appendQueryParameter("pubkey", it) }
 
                         val cursor = resolver.query(uriBuilder.build(), null, null, null, null)
                         val result = cursorToJson(cursor)
