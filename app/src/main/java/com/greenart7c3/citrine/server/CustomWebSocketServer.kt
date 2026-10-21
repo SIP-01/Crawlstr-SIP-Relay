@@ -323,6 +323,12 @@ class CustomWebSocketServer(
                         connection?.send(CommandResult.invalid(event, exception.message!!).toJson())
                         return
                     }
+                    // NIP-42: an AUTH event must carry a valid signature, otherwise any
+                    // client could authenticate as any pubkey.
+                    if (!event.verify()) {
+                        connection?.send(CommandResult.invalid(event, "auth event signature verification failed").toJson())
+                        return
+                    }
 
                     Log.d(Citrine.TAG, "AUTH successful ${event.toJson()}")
                     connection?.users?.add(event.pubKey)
@@ -1054,7 +1060,7 @@ class CustomWebSocketServer(
             }
         } ?: run {
             Log.d(Citrine.TAG, "${targetFile.name} not sent")
-            call.respond(HttpStatusCode.InternalServerError, null)
+            return call.respond(HttpStatusCode.InternalServerError, null)
         }
     }
 
@@ -1494,10 +1500,9 @@ class CustomWebSocketServer(
                         val uriBuilder = "content://com.greenart7c3.citrine.provider/events/by_kind".toUri()
                             .buildUpon()
                             .appendQueryParameter("kind", kind.toString())
-                            .appendQueryParameter("limit", limit.toString())
                             .appendQueryParameter("offset", offset.toString())
 
-                        pubkey?.let { uriBuilder.appendQueryParameter("pubkey", it) }
+                        pubkey?.let { uriBuilder.appendQueryParameter("pubkey", it.toString()) }
 
                         val cursor = resolver.query(uriBuilder.build(), null, null, null, null)
                         val result = cursorToJson(cursor)
