@@ -48,6 +48,24 @@ class Sip01SearchTest {
         return Event.fromJson(json)
     }
 
+    private fun externalReactionEvent(url: String): Event {
+        val json = mapper.writeValueAsString(
+            mapOf(
+                "id" to "d".repeat(64),
+                "pubkey" to "e".repeat(64),
+                "created_at" to 1_786_250_000L,
+                "kind" to 17,
+                "tags" to arrayOf(
+                    arrayOf("k", "web"),
+                    arrayOf("i", url),
+                ),
+                "content" to "+",
+                "sig" to "f".repeat(128),
+            ),
+        )
+        return Event.fromJson(json)
+    }
+
     // ------------------------------------------------------------------
     // Parsing
     // ------------------------------------------------------------------
@@ -126,6 +144,36 @@ class Sip01SearchTest {
     // ------------------------------------------------------------------
     // In-memory matching (live subscription fan-out path)
     // ------------------------------------------------------------------
+
+    @Test
+    fun matchesNip73ExternalWebReactionTagsInMemory() {
+        val url = "https://example.com/article"
+        val event = externalReactionEvent(url)
+        val filter = EventFilter(
+            kinds = setOf(17),
+            tags = mapOf(
+                "k" to setOf("web"),
+                "i" to setOf(url),
+            ),
+        )
+
+        assertTrue(filter.test(event))
+        assertFalse(
+            EventFilter(
+                kinds = setOf(17),
+                tags = mapOf(
+                    "k" to setOf("web"),
+                    "i" to setOf("https://example.com/other"),
+                ),
+            ).test(event),
+        )
+        assertFalse(
+            EventFilter(
+                kinds = setOf(7),
+                tags = mapOf("k" to setOf("web"), "i" to setOf(url)),
+            ).test(event),
+        )
+    }
 
     @Test
     fun matchesSiteAndDomainSemantics() {
@@ -214,6 +262,28 @@ class Sip01SearchTest {
         assertTrue(sql.contains("ESCAPE"))
         assertTrue(params.contains("github.com"))
         assertTrue(params.any { it.toString().contains("bitcoin") })
+    }
+
+    @Test
+    fun sqlTagFiltersIndexNip73Kind17Reactions() {
+        val url = "https://example.com/article"
+        val (sql, params) = EventRepository.createQuery(
+            EventFilter(
+                kinds = setOf(17),
+                tags = mapOf(
+                    "k" to setOf("web"),
+                    "i" to setOf(url),
+                ),
+            ),
+            EventRepository.SelectMode.FULL_EVENTS,
+        )
+
+        assertTrue(sql.contains("col0Name = ?"))
+        assertTrue(params.contains("k"))
+        assertTrue(params.contains("web"))
+        assertTrue(params.contains("i"))
+        assertTrue(params.contains(url))
+        assertTrue(params.contains(17))
     }
 
     @Test
