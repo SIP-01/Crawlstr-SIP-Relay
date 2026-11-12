@@ -14,7 +14,7 @@ Crawlers like [Crawlstr](https://github.com/NostrDanish/Crwalstr) and [indexstr]
 - [x] **NIP-50 web-search operators (§4)** — `site:`, `domain:`, `url:`, `inurl:`, `title:`, `topic:`, `type:`, `platform:`, `category:`, `network:`, `country:`, `mime:`, `filetype:`, `source:`, `lang:`, `before:`, `after:`, `distinct:domain` / `distinct:author`, each filter with a negated `-op:` form
 - [x] **NIP-11 capability advertisement (§5)** — the relay information document carries the `uncaged_index` block (`sip01`, `nip50`, `nip77`, document kinds, operator-declared scope/domains/languages/document types)
 - [x] **Index replication (§6 federation)** — optional sync subscribes to kind 39697 on peer index relays, so the phone keeps a live, fully searchable copy of the shared index even offline; WiFi-only and pause-on-limited-network modes included
-- [x] Plain NIP-01 filters (`kinds`, `#d`, `#t`, `#u`, `#x`, `authors`, `since`/`until`) keep working against the same stored events
+- [x] Plain NIP-01 filters (`kinds`, `#d`, `#t`, `#u`, `#x`, `#i`, `#k`, `authors`, `since`/`until`) keep working against the same stored events, including NIP-25 kind-17 / NIP-73 external web reactions
 
 Example search, straight from any Nostr client connected to the phone:
 
