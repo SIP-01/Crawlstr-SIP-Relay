@@ -200,7 +200,7 @@ class CitrineContentProvider : ContentProvider() {
         }
 
         return when (result) {
-            is QueryResult.Success -> buildEventCursor(result.data, projection)
+            is QueryResult.Success<*> -> buildEventCursor(result.data, projection)
             is QueryResult.Error -> {
                 Log.e(TAG, result.message, result.exception)
                 buildEventCursor(emptyList(), projection)
@@ -231,7 +231,7 @@ class CitrineContentProvider : ContentProvider() {
         }
 
         return when (result) {
-            is QueryResult.Success -> buildEventCursor(result.data, projection)
+            is QueryResult.Success<*> -> buildEventCursor(result.data, projection)
             is QueryResult.Error -> {
                 Log.e(TAG, result.message, result.exception)
                 buildEventCursor(emptyList(), projection)
@@ -297,7 +297,7 @@ class CitrineContentProvider : ContentProvider() {
         }
 
         return when (result) {
-            is QueryResult.Success -> buildEventCursor(result.data, projection)
+            is QueryResult.Success<*> -> buildEventCursor(result.data, projection)
             is QueryResult.Error -> {
                 Log.e(TAG, result.message, result.exception)
                 buildEventCursor(emptyList(), projection)
@@ -363,7 +363,7 @@ class CitrineContentProvider : ContentProvider() {
         }
 
         return when (result) {
-            is QueryResult.Success -> buildEventCursor(result.data, projection)
+            is QueryResult.Success<*> -> buildEventCursor(result.data, projection)
             is QueryResult.Error -> {
                 Log.e(TAG, result.message, result.exception)
                 buildEventCursor(emptyList(), projection)
@@ -404,7 +404,7 @@ class CitrineContentProvider : ContentProvider() {
         }
 
         return when (result) {
-            is QueryResult.Success -> buildTagCursor(result.data, projection)
+            is QueryResult.Success<*> -> buildTagCursor(result.data, projection)
             is QueryResult.Error -> {
                 Log.e(TAG, result.message, result.exception)
                 buildTagCursor(emptyList(), projection)
@@ -607,6 +607,9 @@ class CitrineContentProvider : ContentProvider() {
                         CustomWebSocketServer.VerificationResult.BannedEvent -> {
                             QueryResult.error<Uri>("Event is banned")
                         }
+                        CustomWebSocketServer.VerificationResult.InvalidWebDocument -> {
+                            QueryResult.error<Uri>("Invalid SIP-01 web document metadata")
+                        }
                     }
                 } else {
                     // Server not available, do basic validation and insert
@@ -631,7 +634,7 @@ class CitrineContentProvider : ContentProvider() {
         }
 
         return when (result) {
-            is QueryResult.Success -> result.data
+            is QueryResult.Success<*> -> result.data
             is QueryResult.Error -> {
                 Log.e(TAG, result.message, result.exception)
                 null
