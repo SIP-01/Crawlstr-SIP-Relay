@@ -104,13 +104,13 @@ object WebDocument {
             val c = b.toInt() and 0xFF
             when {
                 c == 0x20 -> sb.append('+')
-                c in 0x30..0x39
-                    || c in 0x41..0x5A
-                    || c in 0x61..0x7A
-                    || c == 0x2A
-                    || c == 0x2D
-                    || c == 0x2E
-                    || c == 0x5F -> sb.append(c.toChar())
+                c in 0x30..0x39,
+                c in 0x41..0x5A,
+                c in 0x61..0x7A,
+                c == 0x2A,
+                c == 0x2D,
+                c == 0x2E,
+                c == 0x5F -> sb.append(c.toChar())
                 else -> sb.append('%').append("%02X".format(c))
             }
         }
