@@ -11,7 +11,7 @@ plugins {
 
 android {
     namespace = "com.greenart7c3.citrine"
-    compileSdk = 37
+    compileSdk = 36
 
     defaultConfig {
         applicationId = "com.greenart7c3.citrine"
