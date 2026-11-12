@@ -75,39 +75,41 @@ data class Sip01Search(
      * needs the join for the host column.
      */
     val requiresWebIndexJoin: Boolean
-        get() = site.isNotEmpty()
-            || notSite.isNotEmpty()
-            || domain.isNotEmpty()
-            || notDomain.isNotEmpty()
-            || url != null
-            || notUrl != null
-            || inUrl.isNotEmpty()
-            || notInUrl.isNotEmpty()
-            || title.isNotEmpty()
-            || notTitle.isNotEmpty()
-            || topic.isNotEmpty()
-            || notTopic.isNotEmpty()
-            || type.isNotEmpty()
-            || notType.isNotEmpty()
-            || platform.isNotEmpty()
-            || notPlatform.isNotEmpty()
-            || category.isNotEmpty()
-            || notCategory.isNotEmpty()
-            || network.isNotEmpty()
-            || notNetwork.isNotEmpty()
-            || country.isNotEmpty()
-            || notCountry.isNotEmpty()
-            || mime.isNotEmpty()
-            || notMime.isNotEmpty()
-            || source.isNotEmpty()
-            || notSource.isNotEmpty()
-            || filetype.isNotEmpty()
-            || notFiletype.isNotEmpty()
-            || lang.isNotEmpty()
-            || notLang.isNotEmpty()
-            || before != null
-            || after != null
-            || distinctDomain
+        get() = listOf(
+            site.isNotEmpty(),
+            notSite.isNotEmpty(),
+            domain.isNotEmpty(),
+            notDomain.isNotEmpty(),
+            url != null,
+            notUrl != null,
+            inUrl.isNotEmpty(),
+            notInUrl.isNotEmpty(),
+            title.isNotEmpty(),
+            notTitle.isNotEmpty(),
+            topic.isNotEmpty(),
+            notTopic.isNotEmpty(),
+            type.isNotEmpty(),
+            notType.isNotEmpty(),
+            platform.isNotEmpty(),
+            notPlatform.isNotEmpty(),
+            category.isNotEmpty(),
+            notCategory.isNotEmpty(),
+            network.isNotEmpty(),
+            notNetwork.isNotEmpty(),
+            country.isNotEmpty(),
+            notCountry.isNotEmpty(),
+            mime.isNotEmpty(),
+            notMime.isNotEmpty(),
+            source.isNotEmpty(),
+            notSource.isNotEmpty(),
+            filetype.isNotEmpty(),
+            notFiletype.isNotEmpty(),
+            lang.isNotEmpty(),
+            notLang.isNotEmpty(),
+            before != null,
+            after != null,
+            distinctDomain,
+        ).any { it }
 
     /**
      * In-memory evaluation for live subscription fan-out (the predicate path
