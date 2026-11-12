@@ -26,6 +26,24 @@ Example search, straight from any Nostr client connected to the phone:
 }]
 ```
 
+
+# Nostr interop: bookmarks, reactions and trust assertions
+
+This relay keeps the Nostr event store generic rather than special-casing these
+client event families. It stores and serves valid events and tags for:
+
+- NIP-25 native reactions (kind 7) and external-content reactions (kind 17).
+- NIP-51 global bookmark lists (kind 10003) and categorized bookmark sets
+  (kind 30003), including opaque NIP-44-encrypted private list content.
+- NIP-B0 public web bookmarks (kind 39701).
+- NIP-85 provider lists (kind 10040) and assertion events (kinds 30382–30385).
+
+Generic NIP-01 tag filters are supported for #i and #k, including NIP-73
+web identifiers and NIP-25 kind-17 web reactions. This relay does not decrypt
+private NIP-51 content and does not calculate or endorse NIP-85 trust ranks.
+It remains an independent index/relay participant; SIP-01 kind 39697 remains
+unchanged.
+
 # Current Features (Citrine upstream)
 
 - [x] Export database
