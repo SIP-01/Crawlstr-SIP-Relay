@@ -31,6 +31,11 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-gradle-
 
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+        with:
+          packages: 'platform-tools platforms;android-37.0 build-tools;37.0.0'
+
       - name: Linter (gradle)
         run: ./gradlew ktlintCheck
 
