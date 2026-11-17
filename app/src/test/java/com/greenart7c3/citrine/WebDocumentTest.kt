@@ -234,6 +234,23 @@ class WebDocumentTest {
     }
 
     @Test
+    fun validationAcceptsV13OptionalRoleProtoAndCapabilityPointer() {
+        val tags = validTags() + arrayOf(
+            arrayOf("role", "tool"),
+            arrayOf("proto", "mcp"),
+            arrayOf("proto", "http"),
+            arrayOf("a", "39698:" + "d".repeat(64) + ":example-tool"),
+        )
+        val event = webDocEvent(
+            tags = tags,
+            content = "{\"title\":\"Example\"}",
+        )
+        // These are optional/unknown to this relay profile. They must not
+        // cause a valid kind-39697 observation to be rejected.
+        assertNull(WebDocument.validateWebDocument(event))
+    }
+
+    @Test
     fun validationIgnoresOtherKinds() {
         val event = webDocEvent(tags = arrayOf(), content = "hello", kind = 1)
         assertNull(WebDocument.validateWebDocument(event))
@@ -298,7 +315,11 @@ class WebDocumentTest {
 
     @Test
     fun validationRejectsInvalidUrlAndDMismatch() {
-        val badUrlTags = validTags("notaurl")
+        // Start with a valid d/u pair, then corrupt only the u tag so the
+        // test reaches relay validation instead of failing inside validTags().
+        val badUrlTags = validTags().map {
+            if (it[0] == "u") arrayOf("u", "notaurl") else it
+        }.toTypedArray()
         assertEquals(
             "u tag is not a valid http(s) URL",
             WebDocument.validateWebDocument(webDocEvent(badUrlTags)),
