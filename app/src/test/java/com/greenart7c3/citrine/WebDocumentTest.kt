@@ -315,7 +315,11 @@ class WebDocumentTest {
 
     @Test
     fun validationRejectsInvalidUrlAndDMismatch() {
-        val badUrlTags = validTags("notaurl")
+        // Start with a valid d/u pair, then corrupt only the u tag so the
+        // test reaches relay validation instead of failing inside validTags().
+        val badUrlTags = validTags().map {
+            if (it[0] == "u") arrayOf("u", "notaurl") else it
+        }.toTypedArray()
         assertEquals(
             "u tag is not a valid http(s) URL",
             WebDocument.validateWebDocument(webDocEvent(badUrlTags)),
